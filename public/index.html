@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat App</title>
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <style>
+      body {
+        background: #18181b;
+        color: #e5e7eb;
+        font-family: "Inter", "Segoe UI", Arial, sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .chat-container {
+        background: #23232a;
+        border-radius: 16px;
+        box-shadow:
+          0 4px 32px 0 #000a,
+          0 1.5px 4px 0 #0004;
+        width: 600px;
+        max-width: 95vw;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .chat-header {
+        background: #1a1a1f;
+        color: #fff;
+        font-size: 1.4rem;
+        font-weight: 600;
+        padding: 20px 24px;
+        border-bottom: 1px solid #23232a;
+        letter-spacing: 1px;
+        text-align: center;
+      }
+      .user-setup {
+        display: flex;
+        gap: 8px;
+        padding: 16px 24px 0 24px;
+        background: #23232a;
+      }
+      .user-setup input {
+        background: #18181b;
+        border: 1px solid #33343b;
+        color: #e5e7eb;
+        border-radius: 8px;
+        padding: 8px 12px;
+        outline: none;
+        font-size: 1rem;
+        transition: border 0.2s;
+      }
+      .user-setup input:focus {
+        border: 1.5px solid #4f46e5;
+      }
+      .user-setup button {
+        background: linear-gradient(90deg, #4f46e5 60%, #6366f1 100%);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .user-setup button:hover {
+        background: linear-gradient(90deg, #6366f1 60%, #4f46e5 100%);
+      }
+      .chat-messages {
+        flex: 1;
+        background: #18181b;
+        padding: 20px 24px 12px 24px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 200px;
+        max-height: 350px;
+      }
+      .chat-message {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        max-width: 80%;
+      }
+      .chat-message.self {
+        align-self: flex-end;
+        align-items: flex-end;
+      }
+      .chat-bubble {
+        background: #27272a;
+        color: #e5e7eb;
+        padding: 10px 16px;
+        border-radius: 16px;
+        font-size: 1rem;
+        box-shadow: 0 1px 4px #0002;
+        margin-bottom: 2px;
+        word-break: break-word;
+      }
+      .chat-message.self .chat-bubble {
+        background: linear-gradient(90deg, #4f46e5 60%, #6366f1 100%);
+        color: #fff;
+      }
+      .chat-sender {
+        font-size: 0.85rem;
+        color: #a1a1aa;
+        margin-bottom: 2px;
+        margin-left: 2px;
+      }
+      .chat-input {
+        display: flex;
+        gap: 8px;
+        padding: 16px 24px 24px 24px;
+        background: #23232a;
+        border-top: 1px solid #23232a;
+      }
+      .chat-input input {
+        flex: 1;
+        background: #18181b;
+        border: 1px solid #33343b;
+        color: #e5e7eb;
+        border-radius: 8px;
+        padding: 10px 14px;
+        outline: none;
+        font-size: 1rem;
+        transition: border 0.2s;
+      }
+      .chat-input input:focus {
+        border: 1.5px solid #4f46e5;
+      }
+      .chat-input button {
+        background: linear-gradient(90deg, #4f46e5 60%, #6366f1 100%);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 2px 20px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .chat-input button:hover {
+        background: linear-gradient(90deg, #6366f1 60%, #4f46e5 100%);
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        background: #23232a;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #18181b;
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chat-container">
+      <div class="chat-header">Chat App</div>
+      <div class="user-setup">
+        <input type="text" id="sender" placeholder="Sender ID" />
+        <input type="text" id="receiver" placeholder="Receiver ID" />
+        <button onclick="connectSocket()">Connect</button>
+      </div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input">
+        <input type="text" id="messageInput" placeholder="Type a message..." />
+        <button onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+    <script>
+      const API_URL = "http://localhost:3000/api/chat/send";
+      const SOCKET_URL = "http://localhost:3000";
+      let socket;
+
+      function connectSocket() {
+        const sender = document.getElementById("sender").value;
+        const receiver = document.getElementById("receiver").value;
+        if (!sender || !receiver) {
+          alert("Please enter both sender and receiver IDs");
+          return;
+        }
+        socket = io(SOCKET_URL);
+        socket.on("connect", () => {
+          console.log("Connected to Socket.IO server");
+          socket.emit("userConnected", sender);
+        });
+        socket.on("newMessage", (message) => {
+          const chatMessages = document.getElementById("chatMessages");
+          const isSelf = message.sender == sender;
+          const msgDiv = document.createElement("div");
+          msgDiv.className = "chat-message" + (isSelf ? " self" : "");
+          const senderDiv = document.createElement("div");
+          senderDiv.className = "chat-sender";
+          senderDiv.textContent = isSelf ? "You" : message.sender;
+          const bubbleDiv = document.createElement("div");
+          bubbleDiv.className = "chat-bubble";
+          bubbleDiv.textContent = message.message;
+          msgDiv.appendChild(senderDiv);
+          msgDiv.appendChild(bubbleDiv);
+          chatMessages.appendChild(msgDiv);
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        });
+      }
+
+      function sendMessage() {
+        const sender = document.getElementById("sender").value;
+        const receiver = document.getElementById("receiver").value;
+        const message = document.getElementById("messageInput").value;
+        if (!sender || !receiver || !message) {
+          alert("Please enter sender, receiver, and message");
+          return;
+        }
+        fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ sender, receiver, message }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log("Message sent:", data);
+            document.getElementById("messageInput").value = "";
+          })
+          .catch((error) => {
+            console.error("Error sending message:", error);
+          });
+      }
+    </script>
+  </body>
+</html>
