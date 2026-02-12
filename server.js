@@ -18,13 +18,16 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
+// Serve static frontend
+const path = require("path");
+app.use(express.static(path.join(__dirname, "public")));
 
 // Routes
 app.use("/api/chat", chatRoutes);
 
-// Health check
+// Serve index.html for root
 app.get("/", (req, res) => {
-  res.send("Chat API is running");
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 // Error handling middleware
